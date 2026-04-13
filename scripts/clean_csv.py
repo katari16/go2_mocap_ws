@@ -12,6 +12,9 @@ import argparse
 import csv
 import os
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 def clean(input_path, output_path, max_jump, ema_alpha):
@@ -56,6 +59,40 @@ def clean(input_path, output_path, max_jump, ema_alpha):
     print(f'Input:    {len(rows)} samples')
     print(f'Rejected: {n_rejected} outliers ({100 * n_rejected / len(rows):.1f}%)')
     print(f'Output:   {output_path}')
+
+    # Plot raw vs cleaned
+    t_sec = np.array([float(r['timestamp_sec']) + float(r['timestamp_nanosec']) * 1e-9
+                       for r in rows])
+    t_sec -= t_sec[0]
+
+    raw_mag = np.linalg.norm(raw, axis=1)
+
+    fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+
+    labels = ['X', 'Y', 'Z']
+    for i, (ax, label) in enumerate(zip(axes[:3], labels)):
+        ax.plot(t_sec, raw[:, i], color='#cccccc', linewidth=0.5, label='raw')
+        ax.scatter(t_sec[~keep], raw[~keep, i], color='red', s=8, zorder=3, label='rejected')
+        ax.plot(t_sec, filtered[:, i], color='#1f77b4', linewidth=1.0, label='cleaned')
+        ax.set_ylabel(f'{label} (m)')
+        ax.legend(loc='upper right', fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    axes[3].plot(t_sec, raw_mag, color='#cccccc', linewidth=0.5, label='raw')
+    axes[3].scatter(t_sec[~keep], raw_mag[~keep], color='red', s=8, zorder=3, label='rejected')
+    axes[3].plot(t_sec, mag, color='#1f77b4', linewidth=1.0, label='cleaned')
+    axes[3].set_ylabel('Magnitude (m)')
+    axes[3].set_xlabel('Time (s)')
+    axes[3].legend(loc='upper right', fontsize=8)
+    axes[3].grid(True, alpha=0.3)
+
+    fig.suptitle(f'Leash Vector — {n_rejected} outliers rejected out of {len(rows)} samples', fontsize=12)
+    fig.tight_layout()
+
+    plot_path = os.path.splitext(output_path)[0] + '.png'
+    fig.savefig(plot_path, dpi=150)
+    plt.close(fig)
+    print(f'Plot:     {plot_path}')
 
 
 def main():
