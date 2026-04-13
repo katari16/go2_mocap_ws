@@ -37,18 +37,27 @@ def main():
 
     fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
 
+    median_xyz = np.median(data, axis=0)
+    median_mag = np.linalg.norm(median_xyz)
+
     for i, (ax, label, color) in enumerate(zip(
         axes[:3],
         ['X', 'Y', 'Z'],
         ['#e41a1c', '#4daf4a', '#377eb8'],
     )):
         ax.plot(t, data[:, i], color=color, linewidth=0.8)
+        ax.axhline(median_xyz[i], color=color, linestyle='--', linewidth=1.2,
+                    label=f'median = {median_xyz[i]:.4f}')
         ax.set_ylabel(f'{label} (m)')
+        ax.legend(loc='upper right', fontsize=8)
         ax.grid(True, alpha=0.3)
 
     axes[3].plot(t, mag, color='#984ea3', linewidth=0.8)
+    axes[3].axhline(median_mag, color='#984ea3', linestyle='--', linewidth=1.2,
+                     label=f'median = {median_mag:.4f}')
     axes[3].set_ylabel('Magnitude (m)')
     axes[3].set_xlabel('Time (s)')
+    axes[3].legend(loc='upper right', fontsize=8)
     axes[3].grid(True, alpha=0.3)
 
     fig.suptitle(path.split('/')[-1], fontsize=12)
