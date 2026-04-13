@@ -46,9 +46,6 @@ class LeashDirectionNode(Node):
         self.declare_parameter('offset_x', 0.04)
         self.declare_parameter('offset_y', 0.0)
         self.declare_parameter('offset_z', -0.10)
-        self.declare_parameter('max_jump', 0.5)
-        self.declare_parameter('ema_alpha', 0.3)
-
         go2_topic = self.get_parameter('go2_topic').get_parameter_value().string_value
         leash_topic = self.get_parameter('leash_topic').get_parameter_value().string_value
         self.base_frame = self.get_parameter('base_frame').get_parameter_value().string_value
@@ -59,14 +56,10 @@ class LeashDirectionNode(Node):
             self.get_parameter('offset_y').get_parameter_value().double_value,
             self.get_parameter('offset_z').get_parameter_value().double_value,
         ])
-        self.max_jump = self.get_parameter('max_jump').get_parameter_value().double_value
-        self.ema_alpha = self.get_parameter('ema_alpha').get_parameter_value().double_value
 
         self.latest_robot = None
         self.latest_leash = None
         self.debug_counter = 0
-        self.prev_vec = None
-        self.filtered_vec = None
 
         self.tf_broadcaster = TransformBroadcaster(self)
         self.sub_robot = self.create_subscription(PoseStamped, go2_topic, self.robot_cb, 10)
@@ -131,30 +124,16 @@ class LeashDirectionNode(Node):
         # This is the leash vector in the go2_1_adjusted frame
         v_obj_from_base = v_obj - self.offset_obj
 
-        # Outlier rejection: skip if jump from previous sample is too large
-        if self.prev_vec is not None:
-            jump = np.linalg.norm(v_obj_from_base - self.prev_vec)
-            if jump > self.max_jump:
-                return
-        self.prev_vec = v_obj_from_base.copy()
-
-        # Exponential moving average
-        if self.filtered_vec is None:
-            self.filtered_vec = v_obj_from_base.copy()
-        else:
-            self.filtered_vec = (self.ema_alpha * v_obj_from_base +
-                                 (1.0 - self.ema_alpha) * self.filtered_vec)
-
         vec_msg = Vector3Stamped()
         vec_msg.header.stamp = self.get_clock().now().to_msg()
         vec_msg.header.frame_id = 'go2_1_adjusted'
-        vec_msg.vector.x = float(self.filtered_vec[0])
-        vec_msg.vector.y = float(self.filtered_vec[1])
-        vec_msg.vector.z = float(self.filtered_vec[2])
+        vec_msg.vector.x = float(v_obj_from_base[0])
+        vec_msg.vector.y = float(v_obj_from_base[1])
+        vec_msg.vector.z = float(v_obj_from_base[2])
         self.pub_vec.publish(vec_msg)
 
         # 180°-Z flip: obj → URDF base frame
-        v_base = np.array([-self.filtered_vec[0], -self.filtered_vec[1], self.filtered_vec[2]])
+        v_base = np.array([-v_obj_from_base[0], -v_obj_from_base[1], v_obj_from_base[2]])
 
         length = np.linalg.norm(v_base)
         if length < 1e-4:
