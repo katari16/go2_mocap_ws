@@ -132,26 +132,22 @@ class LeashDirectionNode(Node):
         vec_msg.vector.z = float(v_obj_from_base[2])
         self.pub_vec.publish(vec_msg)
 
-        # 180°-Z flip: obj → URDF base frame
-        v_base = np.array([-v_obj_from_base[0], -v_obj_from_base[1], v_obj_from_base[2]])
-
-        length = np.linalg.norm(v_base)
+        length = np.linalg.norm(v_obj_from_base)
         if length < 1e-4:
             return
 
-        # Scale arrow
-        v_arrow = v_base * self.arrow_scale
+        v_arrow = v_obj_from_base * self.arrow_scale
 
         if self.debug_counter % 90 == 0:
+            unit = v_obj_from_base / length
             self.get_logger().info(
-                f'Arrow: base_frame len={length:.3f} '
-                f'dir=[{v_base[0]/length:.2f}, {v_base[1]/length:.2f}, {v_base[2]/length:.2f}]'
+                f'Arrow: go2_1_adjusted len={length:.3f} '
+                f'dir=[{unit[0]:.2f}, {unit[1]:.2f}, {unit[2]:.2f}]'
             )
 
-        # Publish arrow marker
         from geometry_msgs.msg import Point
         m = Marker()
-        m.header.frame_id = self.base_frame
+        m.header.frame_id = 'go2_1_adjusted'
         m.header.stamp = self.get_clock().now().to_msg()
         m.ns = 'leash'
         m.id = 0
@@ -162,9 +158,9 @@ class LeashDirectionNode(Node):
         end = Point(x=float(v_arrow[0]), y=float(v_arrow[1]), z=float(v_arrow[2]))
         m.points = [start, end]
 
-        m.scale.x = 0.02   # shaft diameter
-        m.scale.y = 0.04   # head diameter
-        m.scale.z = 0.05   # head length
+        m.scale.x = 0.02
+        m.scale.y = 0.04
+        m.scale.z = 0.05
 
         m.color.r = 1.0
         m.color.g = 0.2
@@ -172,18 +168,9 @@ class LeashDirectionNode(Node):
         m.color.a = 1.0
 
         m.lifetime.sec = 0
-        m.lifetime.nanosec = int(2 * 10**8)  # 200ms
+        m.lifetime.nanosec = int(2 * 10**8)
 
         self.pub_marker.publish(m)
-
-        # Also publish as PoseStamped for logging
-        dir_msg = PoseStamped()
-        dir_msg.header = m.header
-        unit = v_base / length
-        dir_msg.pose.position.x = float(unit[0])
-        dir_msg.pose.position.y = float(unit[1])
-        dir_msg.pose.position.z = float(unit[2])
-        self.pub_dir.publish(dir_msg)
 
 
 def main(args=None):
