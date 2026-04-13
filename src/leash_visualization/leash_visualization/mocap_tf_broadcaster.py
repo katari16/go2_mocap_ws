@@ -57,6 +57,7 @@ class MocapTfBroadcaster(Node):
 
         self.tf_broadcaster = TransformBroadcaster(self)
         self.sub = self.create_subscription(PoseStamped, go2_topic, self.pose_cb, 10)
+        self.logged_frame = False
 
         self.get_logger().info(
             f'Broadcasting TF map → {self.base_frame} from {go2_topic} '
@@ -64,6 +65,13 @@ class MocapTfBroadcaster(Node):
         )
 
     def pose_cb(self, msg):
+        if not self.logged_frame:
+            self.get_logger().info(
+                f'Vicon msg frame_id: "{msg.header.frame_id}" (overriding to "map")'
+            )
+            self.logged_frame = True
+
+        stamp = msg.header.stamp
         p = msg.pose.position
         q = msg.pose.orientation
         q_obj = np.array([q.x, q.y, q.z, q.w])
@@ -76,7 +84,8 @@ class MocapTfBroadcaster(Node):
         p_base = p_obj + quat_rotate(q_obj, self.offset_obj)
 
         t = TransformStamped()
-        t.header = msg.header
+        t.header.stamp = stamp
+        t.header.frame_id = 'map'
         t.child_frame_id = self.base_frame
         t.transform.translation.x = p_base[0]
         t.transform.translation.y = p_base[1]
@@ -88,7 +97,8 @@ class MocapTfBroadcaster(Node):
 
         # Also publish raw Vicon frame so the offset is visible in RViz
         t_raw = TransformStamped()
-        t_raw.header = msg.header
+        t_raw.header.stamp = stamp
+        t_raw.header.frame_id = 'map'
         t_raw.child_frame_id = 'go2_vicon'
         t_raw.transform.translation.x = p_obj[0]
         t_raw.transform.translation.y = p_obj[1]
