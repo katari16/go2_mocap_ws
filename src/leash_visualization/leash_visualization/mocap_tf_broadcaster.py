@@ -86,7 +86,19 @@ class MocapTfBroadcaster(Node):
         t.transform.rotation.z = q_base[2]
         t.transform.rotation.w = q_base[3]
 
-        self.tf_broadcaster.sendTransform(t)
+        # Also publish raw Vicon frame so the offset is visible in RViz
+        t_raw = TransformStamped()
+        t_raw.header = msg.header
+        t_raw.child_frame_id = 'go2_vicon'
+        t_raw.transform.translation.x = p_obj[0]
+        t_raw.transform.translation.y = p_obj[1]
+        t_raw.transform.translation.z = p_obj[2]
+        t_raw.transform.rotation.x = q_obj[0]
+        t_raw.transform.rotation.y = q_obj[1]
+        t_raw.transform.rotation.z = q_obj[2]
+        t_raw.transform.rotation.w = q_obj[3]
+
+        self.tf_broadcaster.sendTransform([t, t_raw])
 
 
 def main(args=None):

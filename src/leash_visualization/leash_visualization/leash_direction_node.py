@@ -8,8 +8,9 @@ robot's body frame (with 180°-Z flip and offset correction).
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from visualization_msgs.msg import Marker
+from tf2_ros import TransformBroadcaster
 
 
 def quat_conjugate(q):
@@ -59,7 +60,9 @@ class LeashDirectionNode(Node):
 
         self.latest_robot = None
         self.latest_leash = None
+        self.debug_counter = 0
 
+        self.tf_broadcaster = TransformBroadcaster(self)
         self.sub_robot = self.create_subscription(PoseStamped, go2_topic, self.robot_cb, 10)
         self.sub_leash = self.create_subscription(PoseStamped, leash_topic, self.leash_cb, 10)
         self.pub_marker = self.create_publisher(Marker, '/leash_arrow', 10)
@@ -77,7 +80,14 @@ class LeashDirectionNode(Node):
         self.latest_leash = msg
 
     def timer_cb(self):
+        self.debug_counter += 1
+
         if self.latest_robot is None or self.latest_leash is None:
+            if self.debug_counter % 90 == 0:
+                self.get_logger().warn(
+                    f'Waiting for data: robot={"OK" if self.latest_robot else "NONE"}, '
+                    f'leash={"OK" if self.latest_leash else "NONE"}'
+                )
             return
 
         # Extract positions and robot orientation
@@ -88,6 +98,21 @@ class LeashDirectionNode(Node):
         p_robot = np.array([pr.x, pr.y, pr.z])
         p_leash = np.array([pl.x, pl.y, pl.z])
         q_obj = np.array([qr.x, qr.y, qr.z, qr.w])
+
+        # Publish leash position as TF so it's visible in RViz
+        t_leash = TransformStamped()
+        t_leash.header.stamp = self.get_clock().now().to_msg()
+        t_leash.header.frame_id = 'map'
+        t_leash.child_frame_id = 'leash_vicon'
+        t_leash.transform.translation.x = p_leash[0]
+        t_leash.transform.translation.y = p_leash[1]
+        t_leash.transform.translation.z = p_leash[2]
+        ql = self.latest_leash.pose.orientation
+        t_leash.transform.rotation.x = ql.x
+        t_leash.transform.rotation.y = ql.y
+        t_leash.transform.rotation.z = ql.z
+        t_leash.transform.rotation.w = ql.w
+        self.tf_broadcaster.sendTransform(t_leash)
 
         # Vector from mocap robot origin to leash, in map frame
         v_map = p_leash - p_robot
@@ -108,7 +133,14 @@ class LeashDirectionNode(Node):
         # Scale arrow
         v_arrow = v_base * self.arrow_scale
 
+        if self.debug_counter % 90 == 0:
+            self.get_logger().info(
+                f'Arrow: base_frame len={length:.3f} '
+                f'dir=[{v_base[0]/length:.2f}, {v_base[1]/length:.2f}, {v_base[2]/length:.2f}]'
+            )
+
         # Publish arrow marker
+        from geometry_msgs.msg import Point
         m = Marker()
         m.header.frame_id = self.base_frame
         m.header.stamp = self.get_clock().now().to_msg()
@@ -117,14 +149,13 @@ class LeashDirectionNode(Node):
         m.type = Marker.ARROW
         m.action = Marker.ADD
 
-        from geometry_msgs.msg import Point
         start = Point(x=0.0, y=0.0, z=0.0)
         end = Point(x=float(v_arrow[0]), y=float(v_arrow[1]), z=float(v_arrow[2]))
         m.points = [start, end]
 
-        m.scale.x = 0.015  # shaft diameter
-        m.scale.y = 0.03   # head diameter
-        m.scale.z = 0.04   # head length
+        m.scale.x = 0.02   # shaft diameter
+        m.scale.y = 0.04   # head diameter
+        m.scale.z = 0.05   # head length
 
         m.color.r = 1.0
         m.color.g = 0.2
@@ -132,7 +163,7 @@ class LeashDirectionNode(Node):
         m.color.a = 1.0
 
         m.lifetime.sec = 0
-        m.lifetime.nanosec = int(1e8)  # 100ms
+        m.lifetime.nanosec = int(2 * 10**8)  # 200ms
 
         self.pub_marker.publish(m)
 
