@@ -2,10 +2,10 @@
 """Clean outliers from leash CSV logs.
 
 Usage:
-  python3 clean_csv.py raw_log.csv                  # writes raw_log_clean.csv
-  python3 clean_csv.py raw_log.csv -o cleaned.csv   # custom output path
-  python3 clean_csv.py raw_log.csv --max-jump 0.3   # stricter outlier gate
-  python3 clean_csv.py raw_log.csv --ema-alpha 0.2   # smoother EMA
+  python3 clean_csv.py raw_log.csv                    # writes raw_log_clean.csv
+  python3 clean_csv.py raw_log.csv --max-jump 0.1     # stricter outlier gate
+  python3 clean_csv.py raw_log.csv --median-window 7  # wider median filter
+  python3 clean_csv.py raw_log.csv --ma-window 15     # wider moving average
 """
 
 import argparse
@@ -17,7 +17,19 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 
-def clean(input_path, output_path, max_jump, ema_alpha):
+def moving_average(data, window):
+    if window <= 1:
+        return data.copy()
+    out = np.copy(data)
+    half = window // 2
+    for i in range(len(data)):
+        lo = max(0, i - half)
+        hi = min(len(data), i + half + 1)
+        out[i] = np.mean(data[lo:hi], axis=0)
+    return out
+
+
+def clean(input_path, output_path, max_jump, median_window, ma_window):
     with open(input_path, 'r') as f:
         reader = csv.DictReader(f)
         rows = list(reader)
@@ -28,7 +40,7 @@ def clean(input_path, output_path, max_jump, ema_alpha):
 
     raw = np.array([[float(r['x']), float(r['y']), float(r['z'])] for r in rows])
 
-    # Pass 1: outlier rejection — flag rows where any component jumps too far
+    # Pass 1: outlier rejection — flag rows where jump is too large
     keep = np.ones(len(raw), dtype=bool)
     for i in range(1, len(raw)):
         if np.linalg.norm(raw[i] - raw[i - 1]) > max_jump:
@@ -36,13 +48,29 @@ def clean(input_path, output_path, max_jump, ema_alpha):
 
     n_rejected = int(np.sum(~keep))
 
-    # Pass 2: EMA on kept samples, interpolate rejected ones
-    filtered = np.copy(raw)
-    ema = raw[0].copy()
+    # Interpolate rejected samples from neighbors
+    interpolated = np.copy(raw)
     for i in range(len(raw)):
-        if keep[i]:
-            ema = ema_alpha * raw[i] + (1.0 - ema_alpha) * ema
-        filtered[i] = ema
+        if not keep[i]:
+            prev = i - 1
+            nxt = i + 1
+            while nxt < len(raw) and not keep[nxt]:
+                nxt += 1
+            if prev >= 0 and nxt < len(raw):
+                interpolated[i] = (raw[prev] + raw[nxt]) / 2.0
+            elif prev >= 0:
+                interpolated[i] = raw[prev]
+
+    # Pass 2: median filter — kills remaining spikes
+    half_med = median_window // 2
+    median_filtered = np.copy(interpolated)
+    for i in range(len(interpolated)):
+        lo = max(0, i - half_med)
+        hi = min(len(interpolated), i + half_med + 1)
+        median_filtered[i] = np.median(interpolated[lo:hi], axis=0)
+
+    # Pass 3: moving average — smooths the signal
+    filtered = moving_average(median_filtered, ma_window)
 
     mag = np.linalg.norm(filtered, axis=1)
 
@@ -99,17 +127,19 @@ def main():
     parser = argparse.ArgumentParser(description='Clean outliers from leash CSV logs')
     parser.add_argument('input', help='Raw CSV file from csv_logger')
     parser.add_argument('-o', '--output', help='Output CSV path (default: <input>_clean.csv)')
-    parser.add_argument('--max-jump', type=float, default=0.5,
-                        help='Max allowed jump between consecutive samples in meters (default: 0.5)')
-    parser.add_argument('--ema-alpha', type=float, default=0.3,
-                        help='EMA smoothing factor, 0-1. Lower = smoother (default: 0.3)')
+    parser.add_argument('--max-jump', type=float, default=0.15,
+                        help='Max allowed jump between consecutive samples in meters (default: 0.15)')
+    parser.add_argument('--median-window', type=int, default=5,
+                        help='Median filter window size, odd number (default: 5)')
+    parser.add_argument('--ma-window', type=int, default=11,
+                        help='Moving average window size (default: 11)')
     args = parser.parse_args()
 
     if args.output is None:
         base, ext = os.path.splitext(args.input)
         args.output = f'{base}_clean{ext}'
 
-    clean(args.input, args.output, args.max_jump, args.ema_alpha)
+    clean(args.input, args.output, args.max_jump, args.median_window, args.ma_window)
 
 
 if __name__ == '__main__':
