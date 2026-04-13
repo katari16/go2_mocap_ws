@@ -21,6 +21,7 @@ setup(
             'mocap_tf_broadcaster = leash_visualization.mocap_tf_broadcaster:main',
             'leash_direction_node = leash_visualization.leash_direction_node:main',
             'fixed_joint_publisher = leash_visualization.fixed_joint_publisher:main',
+            'csv_logger = leash_visualization.csv_logger:main',
         ],
     },
 )

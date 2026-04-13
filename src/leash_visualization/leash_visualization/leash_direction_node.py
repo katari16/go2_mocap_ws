@@ -8,7 +8,7 @@ robot's body frame (with 180°-Z flip and offset correction).
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped, Vector3Stamped
 from visualization_msgs.msg import Marker
 from tf2_ros import TransformBroadcaster
 
@@ -67,6 +67,7 @@ class LeashDirectionNode(Node):
         self.sub_leash = self.create_subscription(PoseStamped, leash_topic, self.leash_cb, 10)
         self.pub_marker = self.create_publisher(Marker, '/leash_arrow', 10)
         self.pub_dir = self.create_publisher(PoseStamped, '/leash_direction', 10)
+        self.pub_vec = self.create_publisher(Vector3Stamped, '/leash_vector', 10)
         self.timer = self.create_timer(1.0 / rate, self.timer_cb)
 
         self.get_logger().info(
@@ -121,7 +122,16 @@ class LeashDirectionNode(Node):
         v_obj = quat_rotate(quat_conjugate(q_obj), v_map)
 
         # Subtract offset (mocap origin → URDF base, in obj frame)
+        # This is the leash vector in the go2_1_adjusted frame
         v_obj_from_base = v_obj - self.offset_obj
+
+        vec_msg = Vector3Stamped()
+        vec_msg.header.stamp = self.get_clock().now().to_msg()
+        vec_msg.header.frame_id = 'go2_1_adjusted'
+        vec_msg.vector.x = float(v_obj_from_base[0])
+        vec_msg.vector.y = float(v_obj_from_base[1])
+        vec_msg.vector.z = float(v_obj_from_base[2])
+        self.pub_vec.publish(vec_msg)
 
         # 180°-Z flip: obj → URDF base frame
         v_base = np.array([-v_obj_from_base[0], -v_obj_from_base[1], v_obj_from_base[2]])
