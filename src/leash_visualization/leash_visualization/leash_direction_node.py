@@ -38,8 +38,8 @@ class LeashDirectionNode(Node):
     def __init__(self):
         super().__init__('leash_direction_node')
 
-        self.declare_parameter('go2_topic', '/vicon/go2/go2')
-        self.declare_parameter('leash_topic', '/vicon/leash/leash')
+        self.declare_parameter('go2_topic', '/vicon/go2_1/go2_1')
+        self.declare_parameter('leash_topic', '/vicon/string/string')
         self.declare_parameter('base_frame', 'base')
         self.declare_parameter('marker_rate_hz', 30.0)
         self.declare_parameter('arrow_scale', 1.0)

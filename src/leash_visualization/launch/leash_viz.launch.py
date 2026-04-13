@@ -11,7 +11,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
 
     go2_topic_arg = DeclareLaunchArgument(
-        'go2_topic', default_value='/vicon/go2/go2',
+        'go2_topic', default_value='/vicon/go2_1/go2_1',
         description='Vicon PoseStamped topic for Go2 rigid body',
     )
     leash_topic_arg = DeclareLaunchArgument(

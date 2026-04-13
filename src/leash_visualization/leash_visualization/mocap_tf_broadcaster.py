@@ -41,7 +41,7 @@ class MocapTfBroadcaster(Node):
     def __init__(self):
         super().__init__('mocap_tf_broadcaster')
 
-        self.declare_parameter('go2_topic', '/vicon/go2/go2')
+        self.declare_parameter('go2_topic', '/vicon/go2_1/go2_1')
         self.declare_parameter('base_frame', 'base')
         self.declare_parameter('offset_x', 0.04)
         self.declare_parameter('offset_y', 0.0)
