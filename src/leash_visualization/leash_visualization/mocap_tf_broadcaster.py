@@ -108,7 +108,20 @@ class MocapTfBroadcaster(Node):
         t_raw.transform.rotation.z = q_obj[2]
         t_raw.transform.rotation.w = q_obj[3]
 
-        self.tf_broadcaster.sendTransform([t, t_raw])
+        # Adjusted frame at offset position with original Vicon orientation
+        t_adj = TransformStamped()
+        t_adj.header.stamp = stamp
+        t_adj.header.frame_id = 'map'
+        t_adj.child_frame_id = 'go2_1_adjusted'
+        t_adj.transform.translation.x = p_base[0]
+        t_adj.transform.translation.y = p_base[1]
+        t_adj.transform.translation.z = p_base[2]
+        t_adj.transform.rotation.x = q_obj[0]
+        t_adj.transform.rotation.y = q_obj[1]
+        t_adj.transform.rotation.z = q_obj[2]
+        t_adj.transform.rotation.w = q_obj[3]
+
+        self.tf_broadcaster.sendTransform([t, t_raw, t_adj])
 
 
 def main(args=None):
